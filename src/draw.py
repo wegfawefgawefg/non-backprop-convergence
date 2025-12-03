@@ -5,18 +5,38 @@ from src.utils import mouse_pos
 from src.settings import WINDOW_DIMS, DIMS
 
 
-def draw(state, graphics):
+def draw(
+    state,
+    graphics,
+    fps: float = 0.0,
+    fps_target: float = 0.0,
+    sim_rate: float = 0.0,
+    sim_target: float = 0.0,
+):
     graphics.render_surface.fill((0, 0, 0))
 
     mpos = mouse_pos()
 
-    grid_pos = glm.vec2(0, 0)
-    grid_size = DIMS / 2
+    # grid pos is 20% down from top
+    # grid dims are smallest of the width/2 or height/2
+    grid_pos = glm.vec2(0.02, 0.1) * DIMS
+    grid_ratio = 0.4
+    grid_size = glm.vec2(DIMS.x * grid_ratio, DIMS.y * grid_ratio)
+    smaller_dim = min(grid_size.x, grid_size.y)
+    grid_size = glm.vec2(smaller_dim, smaller_dim)
+
     draw_grid_and_nn(state, graphics, grid_pos, grid_size)
 
     # just draw a circle on the mouse
     pygame.draw.circle(graphics.render_surface, (0, 255, 0), mpos, 2)
     draw_grid_coords_under_mouse(state, graphics, grid_pos, grid_size, mpos)
+
+    draw_perf_stats(graphics, fps, fps_target, sim_rate, sim_target)
+
+    # lets put it on the right 40% of the screen, from top to bottom
+    stats_pos = glm.vec2(DIMS.x * 0.6, 0)
+    stats_size = glm.vec2(DIMS.x * 0.4, DIMS.y)
+    draw_stats(state, graphics, stats_pos, stats_size)
 
     stretched_surface = pygame.transform.scale(graphics.render_surface, WINDOW_DIMS)
     graphics.window.blit(stretched_surface, (0, 0))
@@ -27,6 +47,16 @@ def draw(state, graphics):
 def draw_grid_and_nn(state, graphics, pos: glm.vec2, size: glm.vec2):
     draw_grid(state, graphics, pos, size)
     draw_neurons(state, graphics, pos, size)
+
+
+def draw_stats(state, graphics, pos, size):
+    # for now just a box
+    BOX_COLOR = (30, 30, 30)
+    pygame.draw.rect(
+        graphics.render_surface,
+        BOX_COLOR,
+        (int(round(pos.x)), int(round(pos.y)), int(round(size.x)), int(round(size.y))),
+    )
 
 
 def draw_grid_coords_under_mouse(
@@ -55,6 +85,25 @@ def draw_grid_coords_under_mouse(
     text = font.render(f"({col}, {row})", True, (255, 255, 255))
     # put it at pos
     graphics.render_surface.blit(text, (pos.x, pos.y))
+
+
+def draw_perf_stats(graphics, fps, fps_target, sim_rate, sim_target):
+    def fmt_line(label, current, target):
+        percent = 0.0
+        if target:
+            percent = (current / target) * 100.0
+        return f"{label}: {current:6.1f} / {target:6.1f} ({percent:5.1f}%)"
+
+    lines = [
+        fmt_line("SIM", sim_rate, sim_target),
+        fmt_line("FPS", fps, fps_target),
+    ]
+
+    y = 2
+    for line in lines:
+        text_surface = graphics.font.render(line, True, (255, 255, 255))
+        graphics.render_surface.blit(text_surface, (2, y))
+        y += text_surface.get_height() + 2
 
 
 def draw_grid(state, graphics, pos: glm.vec2, size: glm.vec2):

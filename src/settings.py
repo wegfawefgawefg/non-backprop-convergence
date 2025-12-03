@@ -1,4 +1,4 @@
 import glm
 
-DIMS = glm.vec2(400, 400)
-WINDOW_DIMS = glm.vec2(800, 800)
+WINDOW_DIMS = glm.vec2(1600, 800)
+DIMS = WINDOW_DIMS / 2

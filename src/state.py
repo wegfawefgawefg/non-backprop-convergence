@@ -79,3 +79,9 @@ def init_brain(state):
             neuron.outputs.append(clamp_to_grid(output_pos))
 
         state.neurons.append(neuron)
+
+
+def step_state(state, dt: float) -> None:
+    """Advance simulation time and bookkeeping."""
+    state.step_count += 1
+    state.time += dt
