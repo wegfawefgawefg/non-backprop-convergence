@@ -215,6 +215,9 @@ def migrate_input(state: State, input):
 
 def migrate_hub(state: State, neuron: Neuron):
     """Randomly walk hubs while keeping them near their neuron."""
+    if neuron.hub_satisfied:
+        return
+
     step = random_step()
     if step.x == 0 and step.y == 0:
         return
