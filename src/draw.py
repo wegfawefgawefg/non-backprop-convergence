@@ -16,7 +16,7 @@ def draw(state, graphics):
 
     # just draw a circle on the mouse
     pygame.draw.circle(graphics.render_surface, (0, 255, 0), mpos, 2)
-    draw_grid_coords_under_mouse(graphics, grid_pos, grid_size, mpos)
+    draw_grid_coords_under_mouse(state, graphics, grid_pos, grid_size, mpos)
 
     stretched_surface = pygame.transform.scale(graphics.render_surface, WINDOW_DIMS)
     graphics.window.blit(stretched_surface, (0, 0))
@@ -30,19 +30,25 @@ def draw_grid_and_nn(state, graphics, pos: glm.vec2, size: glm.vec2):
 
 
 def draw_grid_coords_under_mouse(
-    graphics, grid_pos: glm.vec2, grid_size: glm.vec2, pos: glm.vec2
+    state,
+    graphics,
+    grid_pos: glm.vec2,
+    grid_size: glm.vec2,
+    pos: glm.vec2,
 ):
     mouse = mouse_pos()
     col = "-"
     row = "-"
-    if (
-        mouse.x >= grid_pos.x
-        and mouse.x < grid_pos.x + grid_size.x
-        and mouse.y >= grid_pos.y
-        and mouse.y < grid_pos.y + grid_size.y
-    ):
-        col = int((mouse.x - grid_pos.x) / 10)
-        row = int((mouse.y - grid_pos.y) / 10)
+    cell = glm.vec2(
+        grid_size.x / state.GRID_SIZE if state.GRID_SIZE else 0,
+        grid_size.y / state.GRID_SIZE if state.GRID_SIZE else 0,
+    )
+
+    within_x = grid_pos.x <= mouse.x < grid_pos.x + grid_size.x
+    within_y = grid_pos.y <= mouse.y < grid_pos.y + grid_size.y
+    if within_x and within_y and cell.x and cell.y:
+        col = int((mouse.x - grid_pos.x) / cell.x)
+        row = int((mouse.y - grid_pos.y) / cell.y)
 
     # draw the text in the top right corner
     font = pygame.font.Font(None, 16)
@@ -54,22 +60,25 @@ def draw_grid_coords_under_mouse(
 def draw_grid(state, graphics, pos: glm.vec2, size: glm.vec2):
     GRID_COLOR = (50, 50, 50)
     GRID_WIDTH = 1
+    cell_x = size.x / state.GRID_SIZE
+    cell_y = size.y / state.GRID_SIZE
 
-    # draw the grid lines
-    for x in range(int(pos.x), int(pos.x + size.x) + 1, 10):
+    for i in range(state.GRID_SIZE + 1):
+        x = int(round(pos.x + i * cell_x))
         pygame.draw.line(
             graphics.render_surface,
             GRID_COLOR,
-            (x, pos.y),
-            (x, pos.y + size.y),
+            (x, int(round(pos.y))),
+            (x, int(round(pos.y + size.y))),
             GRID_WIDTH,
         )
-    for y in range(int(pos.y), int(pos.y + size.y) + 1, 10):
+    for j in range(state.GRID_SIZE + 1):
+        y = int(round(pos.y + j * cell_y))
         pygame.draw.line(
             graphics.render_surface,
             GRID_COLOR,
-            (pos.x, y),
-            (pos.x + size.x, y),
+            (int(round(pos.x)), y),
+            (int(round(pos.x + size.x)), y),
             GRID_WIDTH,
         )
 
@@ -89,47 +98,49 @@ def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
     OUTPUT_HUB_COLOR = (0, 200, 0)
     OUTPUT_COLOR = (200, 0, 0)
 
-    for neuron in state.neurons:
-        neuron_pos = glm.vec2(
-            pos.x + neuron.position[0] * 10 + 5, pos.y + neuron.position[1] * 10 + 5
+    cell = glm.vec2(size.x / state.GRID_SIZE, size.y / state.GRID_SIZE)
+
+    def to_surface_center(grid_point):
+        return glm.vec2(
+            pos.x + (grid_point[0] + 0.5) * cell.x,
+            pos.y + (grid_point[1] + 0.5) * cell.y,
         )
+
+    def as_int_tuple(vec: glm.vec2) -> tuple[int, int]:
+        return int(round(vec.x)), int(round(vec.y))
+
+    for neuron in state.neurons:
+        neuron_pos = to_surface_center(neuron.position)
 
         # draw inputs
         for input_pos in neuron.inputs:
-            input_vec = glm.vec2(
-                pos.x + input_pos[0] * 10 + 5, pos.y + input_pos[1] * 10 + 5
-            )
+            input_vec = to_surface_center(input_pos)
             pygame.draw.line(
                 graphics.render_surface,
                 INPUT_COLOR,
-                neuron_pos.to_tuple(),
-                input_vec.to_tuple(),
+                as_int_tuple(neuron_pos),
+                as_int_tuple(input_vec),
                 1,
             )
 
         # draw output hub
-        output_hub_vec = glm.vec2(
-            pos.x + neuron.output_hub_pos[0] * 10 + 5,
-            pos.y + neuron.output_hub_pos[1] * 10 + 5,
-        )
+        output_hub_vec = to_surface_center(neuron.output_hub_pos)
         pygame.draw.line(
             graphics.render_surface,
             OUTPUT_HUB_COLOR,
-            neuron_pos.to_tuple(),
-            output_hub_vec.to_tuple(),
+            as_int_tuple(neuron_pos),
+            as_int_tuple(output_hub_vec),
             1,
         )
 
         # draw outputs
         for output_pos in neuron.outputs:
-            output_vec = glm.vec2(
-                pos.x + output_pos[0] * 10 + 5, pos.y + output_pos[1] * 10 + 5
-            )
+            output_vec = to_surface_center(output_pos)
             pygame.draw.line(
                 graphics.render_surface,
                 OUTPUT_COLOR,
-                output_hub_vec.to_tuple(),
-                output_vec.to_tuple(),
+                as_int_tuple(output_hub_vec),
+                as_int_tuple(output_vec),
                 1,
             )
 
@@ -137,7 +148,7 @@ def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
         pygame.draw.circle(
             graphics.render_surface,
             NEURON_COLOR,
-            neuron_pos.to_tuple(),
+            as_int_tuple(neuron_pos),
             NEURON_RADIUS,
         )
 

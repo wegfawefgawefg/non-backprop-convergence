@@ -15,6 +15,15 @@ class State:
         self.loss = 0.0
 
 
+def clamp_to_grid(point: tuple[int, int]) -> tuple[int, int]:
+    lower = 0
+    upper = State.GRID_SIZE - 1
+    return (
+        max(lower, min(upper, point[0])),
+        max(lower, min(upper, point[1])),
+    )
+
+
 def init_brain(state):
     NUM_NEURONS = 8
     INPUT_MAX_DIST = 4
@@ -37,9 +46,11 @@ def init_brain(state):
 
     for _ in range(NUM_NEURONS):
         neuron = Neuron()
-        neuron.position = (
-            random.randint(0, State.GRID_SIZE - 1),
-            random.randint(0, State.GRID_SIZE - 1),
+        neuron.position = clamp_to_grid(
+            (
+                random.randint(0, State.GRID_SIZE - 1),
+                random.randint(0, State.GRID_SIZE - 1),
+            )
         )
 
         # create inputs
@@ -48,7 +59,7 @@ def init_brain(state):
                 neuron.position[0] + random.randint(-INPUT_MAX_DIST, INPUT_MAX_DIST),
                 neuron.position[1] + random.randint(-INPUT_MAX_DIST, INPUT_MAX_DIST),
             )
-            neuron.inputs.append(input_pos)
+            neuron.inputs.append(clamp_to_grid(input_pos))
 
         # create output hub
         output_hub_pos = (
@@ -57,7 +68,7 @@ def init_brain(state):
             neuron.position[1]
             + random.randint(-OUTPUT_HUB_MAX_DIST, OUTPUT_HUB_MAX_DIST),
         )
-        neuron.output_hub_pos = output_hub_pos
+        neuron.output_hub_pos = clamp_to_grid(output_hub_pos)
 
         # create outputs
         for _ in range(NUM_OUTPUTS):
@@ -65,6 +76,6 @@ def init_brain(state):
                 output_hub_pos[0] + random.randint(-OUTPUT_MAX_DIST, OUTPUT_MAX_DIST),
                 output_hub_pos[1] + random.randint(-OUTPUT_MAX_DIST, OUTPUT_MAX_DIST),
             )
-            neuron.outputs.append(output_pos)
+            neuron.outputs.append(clamp_to_grid(output_pos))
 
         state.neurons.append(neuron)
