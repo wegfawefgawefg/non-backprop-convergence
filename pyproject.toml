@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["matplotlib", "pygame>=2.6.1", "pyglm>=2.8.3", "scikit-learn"]
+dependencies = ["matplotlib", "numpy", "pygame>=2.6.1", "pyglm>=2.8.3", "scikit-learn"]
 
 [project.scripts]
 main = "src.main:main"

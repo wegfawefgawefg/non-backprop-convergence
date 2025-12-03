@@ -220,6 +220,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "matplotlib" },
+    { name = "numpy" },
     { name = "pygame" },
     { name = "pyglm" },
     { name = "scikit-learn" },
@@ -228,6 +229,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "matplotlib" },
+    { name = "numpy" },
     { name = "pygame", specifier = ">=2.6.1" },
     { name = "pyglm", specifier = ">=2.8.3" },
     { name = "scikit-learn" },

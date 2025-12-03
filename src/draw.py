@@ -2,7 +2,14 @@ import pygame
 import glm
 
 from src.utils import mouse_pos
-from src.settings import WINDOW_DIMS, DIMS
+from src.settings import (
+    WINDOW_DIMS,
+    DIMS,
+    LEFT_PADDING_FRAC_X,
+    TOP_PADDING_FRAC_Y,
+    SQUARE_SIZE_HEIGHT_FRAC,
+    VERTICAL_GAP_FRAC_Y,
+)
 
 
 def draw(
@@ -17,19 +24,22 @@ def draw(
 
     mpos = mouse_pos()
 
-    # grid pos is 20% down from top
-    # grid dims are smallest of the width/2 or height/2
-    grid_pos = glm.vec2(0.02, 0.1) * DIMS
-    grid_ratio = 0.4
-    grid_size = glm.vec2(DIMS.x * grid_ratio, DIMS.y * grid_ratio)
-    smaller_dim = min(grid_size.x, grid_size.y)
-    grid_size = glm.vec2(smaller_dim, smaller_dim)
+    left_pad = DIMS.x * LEFT_PADDING_FRAC_X
+    top_pad = DIMS.y * TOP_PADDING_FRAC_Y
+    square_size = DIMS.y * SQUARE_SIZE_HEIGHT_FRAC
 
+    grid_pos = glm.vec2(left_pad, top_pad)
+    grid_size = glm.vec2(square_size, square_size)
     draw_grid_and_nn(state, graphics, grid_pos, grid_size)
 
     # just draw a circle on the mouse
     pygame.draw.circle(graphics.render_surface, (0, 255, 0), mpos, 2)
     draw_grid_coords_under_mouse(state, graphics, grid_pos, grid_size, mpos)
+
+    dist_top = grid_pos.y + grid_size.y + DIMS.y * VERTICAL_GAP_FRAC_Y
+    dist_pos = glm.vec2(left_pad, dist_top)
+    dist_size = glm.vec2(square_size, square_size)
+    draw_target_distribution(state, graphics, dist_pos, dist_size)
 
     draw_perf_stats(graphics, fps, fps_target, sim_rate, sim_target)
 
@@ -57,6 +67,26 @@ def draw_stats(state, graphics, pos, size):
         BOX_COLOR,
         (int(round(pos.x)), int(round(pos.y)), int(round(size.x)), int(round(size.y))),
     )
+
+
+def draw_target_distribution(state, graphics, pos: glm.vec2, size: glm.vec2):
+    surface = state.target_distribution_surface
+    if surface is None:
+        return
+
+    dest_rect = pygame.Rect(
+        int(round(pos.x)),
+        int(round(pos.y)),
+        int(round(size.x)),
+        int(round(size.y)),
+    )
+
+    blit_surface = surface
+    if surface.get_size() != (dest_rect.width, dest_rect.height):
+        blit_surface = pygame.transform.smoothscale(surface, dest_rect.size)
+
+    graphics.render_surface.blit(blit_surface, dest_rect.topleft)
+    pygame.draw.rect(graphics.render_surface, (80, 80, 80), dest_rect, 1)
 
 
 def draw_grid_coords_under_mouse(
@@ -146,6 +176,7 @@ def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
     INPUT_COLOR = (0, 0, 200)
     OUTPUT_HUB_COLOR = (0, 200, 0)
     OUTPUT_COLOR = (200, 0, 0)
+    SIGNAL_COLOR = (100, 255, 100)
 
     cell = glm.vec2(size.x / state.GRID_SIZE, size.y / state.GRID_SIZE)
 
@@ -174,13 +205,26 @@ def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
 
         # draw output hub
         output_hub_vec = to_surface_center(neuron.output_hub_pos)
+        neuron_screen = as_int_tuple(neuron_pos)
+        hub_screen = as_int_tuple(output_hub_vec)
         pygame.draw.line(
             graphics.render_surface,
             OUTPUT_HUB_COLOR,
-            as_int_tuple(neuron_pos),
-            as_int_tuple(output_hub_vec),
+            neuron_screen,
+            hub_screen,
             1,
         )
+
+        if neuron.signal_active and neuron.signal_pos > 0.0:
+            progress = min(1.0, neuron.signal_pos)
+            signal_point = neuron_pos + (output_hub_vec - neuron_pos) * progress
+            pygame.draw.line(
+                graphics.render_surface,
+                SIGNAL_COLOR,
+                neuron_screen,
+                as_int_tuple(signal_point),
+                2,
+            )
 
         # draw outputs
         for output_pos in neuron.outputs:
