@@ -2,7 +2,10 @@ import pygame
 import glm
 
 from src.graphics import Graphics
-from src.state import State, init_brain, init_target_distribution, step_state
+from src.state import State
+from src.brain import init_brain
+from src.data import init_target_distribution
+from src.step import step_state
 from src.utils import mouse_pos
 from src.settings import DIMS, SQUARE_SIZE_HEIGHT_FRAC
 from src.draw import draw
@@ -18,7 +21,7 @@ def main():
 
     square_px = int(DIMS.y * SQUARE_SIZE_HEIGHT_FRAC)
     dist_size = (square_px, square_px)
-    init_target_distribution(state, size=dist_size, seed=7, nodes=2)
+    init_target_distribution(state, graphics, size=dist_size, seed=7, nodes=2)
     init_brain(state)
 
     running = True

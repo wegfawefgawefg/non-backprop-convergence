@@ -3,6 +3,7 @@ import glm
 
 from src.brain import Neuron
 from src.state import State, move_input, move_output
+from src.settings import GRID_SIZE, INPUT_MAX_DIST, OUTPUT_MAX_DIST, HUB_MAX_DIST
 
 
 def step_state(state: State, dt: float) -> None:
@@ -63,7 +64,7 @@ def roam(pos: glm.ivec2) -> glm.ivec2:
 
 def clamp_to_grid(point: glm.ivec2) -> glm.ivec2:
     lower = 0
-    upper = State.GRID_SIZE - 1
+    upper = GRID_SIZE - 1
     return glm.ivec2(
         max(lower, min(upper, point.x)),
         max(lower, min(upper, point.y)),
@@ -101,7 +102,7 @@ def migrate_neuron(state: State, neuron: Neuron):
 
         # check if input is too far in x direction
         x_dist = abs(input.pos.x - neuron.pos.x)
-        if x_dist > neuron.input_max_dist:
+        if x_dist > INPUT_MAX_DIST:
             # shift the input by the x step direction
             new_x = input.pos.x + step.x
             moved_x = True
@@ -113,7 +114,7 @@ def migrate_neuron(state: State, neuron: Neuron):
 
         # check if input is too far in y direction
         y_dist = abs(input.pos.y - neuron.pos.y)
-        if y_dist > neuron.input_max_dist:
+        if y_dist > INPUT_MAX_DIST:
             # shift the input by the y step direction
             new_y = input.pos.y + step.y
             moved_y = True
@@ -137,13 +138,13 @@ def migrate_neuron(state: State, neuron: Neuron):
 
     hub_moved_x = False
     hub_x_dist = abs(hub_pos.x - neuron.pos.x)
-    if hub_x_dist > neuron.hub_max_dist:
+    if hub_x_dist > HUB_MAX_DIST:
         hub_step.x = step.x
         hub_moved_x = True
 
     hub_moved_y = False
     hub_y_dist = abs(hub_pos.y - neuron.pos.y)
-    if hub_y_dist > neuron.hub_max_dist:
+    if hub_y_dist > HUB_MAX_DIST:
         hub_step.y = step.y
         hub_moved_y = True
 

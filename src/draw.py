@@ -1,6 +1,7 @@
 import pygame
 import glm
 
+from src.state import State
 from src.utils import mouse_pos
 from src.settings import (
     WINDOW_DIMS,
@@ -9,6 +10,7 @@ from src.settings import (
     TOP_PADDING_FRAC_Y,
     SQUARE_SIZE_HEIGHT_FRAC,
     VERTICAL_GAP_FRAC_Y,
+    GRID_SIZE,
 )
 
 
@@ -100,8 +102,8 @@ def draw_grid_coords_under_mouse(
     col = "-"
     row = "-"
     cell = glm.vec2(
-        grid_size.x / state.GRID_SIZE if state.GRID_SIZE else 0,
-        grid_size.y / state.GRID_SIZE if state.GRID_SIZE else 0,
+        grid_size.x / GRID_SIZE if GRID_SIZE else 0,
+        grid_size.y / GRID_SIZE if GRID_SIZE else 0,
     )
 
     within_x = grid_pos.x <= mouse.x < grid_pos.x + grid_size.x
@@ -139,10 +141,10 @@ def draw_perf_stats(graphics, fps, fps_target, sim_rate, sim_target):
 def draw_grid(state, graphics, pos: glm.vec2, size: glm.vec2):
     GRID_COLOR = (50, 50, 50)
     GRID_WIDTH = 1
-    cell_x = size.x / state.GRID_SIZE
-    cell_y = size.y / state.GRID_SIZE
+    cell_x = size.x / GRID_SIZE
+    cell_y = size.y / GRID_SIZE
 
-    for i in range(state.GRID_SIZE + 1):
+    for i in range(GRID_SIZE + 1):
         x = int(round(pos.x + i * cell_x))
         pygame.draw.line(
             graphics.render_surface,
@@ -151,7 +153,7 @@ def draw_grid(state, graphics, pos: glm.vec2, size: glm.vec2):
             (x, int(round(pos.y + size.y))),
             GRID_WIDTH,
         )
-    for j in range(state.GRID_SIZE + 1):
+    for j in range(GRID_SIZE + 1):
         y = int(round(pos.y + j * cell_y))
         pygame.draw.line(
             graphics.render_surface,
@@ -162,7 +164,7 @@ def draw_grid(state, graphics, pos: glm.vec2, size: glm.vec2):
         )
 
 
-def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
+def draw_neurons(state: State, graphics, pos: glm.vec2, size: glm.vec2):
     """
     draw neuron position as a blue circle
     draw neuron inputs as blue lines out from neuron position
@@ -178,23 +180,23 @@ def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
     OUTPUT_COLOR = (200, 0, 0)
     SIGNAL_COLOR = (100, 255, 100)
 
-    cell = glm.vec2(size.x / state.GRID_SIZE, size.y / state.GRID_SIZE)
+    cell = glm.vec2(size.x / GRID_SIZE, size.y / GRID_SIZE)
 
     def to_surface_center(grid_point):
         return glm.vec2(
-            pos.x + (grid_point[0] + 0.5) * cell.x,
-            pos.y + (grid_point[1] + 0.5) * cell.y,
+            pos.x + (grid_point.x + 0.5) * cell.x,
+            pos.y + (grid_point.y + 0.5) * cell.y,
         )
 
     def as_int_tuple(vec: glm.vec2) -> tuple[int, int]:
         return int(round(vec.x)), int(round(vec.y))
 
     for neuron in state.neurons:
-        neuron_pos = to_surface_center(neuron.position)
+        neuron_pos = to_surface_center(neuron.pos)
 
         # draw inputs
-        for input_pos in neuron.inputs:
-            input_vec = to_surface_center(input_pos)
+        for input in neuron.inputs:
+            input_vec = to_surface_center(input.pos)
             pygame.draw.line(
                 graphics.render_surface,
                 INPUT_COLOR,
@@ -204,7 +206,7 @@ def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
             )
 
         # draw output hub
-        output_hub_vec = to_surface_center(neuron.output_hub_pos)
+        output_hub_vec = to_surface_center(neuron.hub_pos)
         neuron_screen = as_int_tuple(neuron_pos)
         hub_screen = as_int_tuple(output_hub_vec)
         pygame.draw.line(
@@ -227,8 +229,8 @@ def draw_neurons(state, graphics, pos: glm.vec2, size: glm.vec2):
             )
 
         # draw outputs
-        for output_pos in neuron.outputs:
-            output_vec = to_surface_center(output_pos)
+        for output in neuron.outputs:
+            output_vec = to_surface_center(output.pos)
             pygame.draw.line(
                 graphics.render_surface,
                 OUTPUT_COLOR,
