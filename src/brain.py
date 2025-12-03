@@ -23,7 +23,7 @@ class Input:
         Input.NEXT_ID += 1
 
         self.pos: glm.ivec2 = None
-        self.weight: float = None
+        self.weight: float = 0.0
 
         self.parent_neuron = None
 
@@ -38,7 +38,7 @@ class Output:
         Output.NEXT_ID += 1
 
         self.pos: glm.ivec2 = None
-        self.weight: float = None
+        self.weight: float = 0.0
 
         self.parent_neuron = None
 
@@ -110,6 +110,7 @@ def init_brain(state):
             )
             new_input = Input()
             new_input.pos = input_pos
+            new_input.weight = random.uniform(-1.0, 1.0)
             new_input.parent_neuron = neuron
             neuron.inputs.append(new_input)
             # add to state lookup
@@ -138,6 +139,7 @@ def init_brain(state):
             )
             new_output = Output()
             new_output.pos = output_pos
+            new_output.weight = random.uniform(-1.0, 1.0)
             new_output.parent_neuron = neuron
             neuron.outputs.append(new_output)
             key = (output_pos.x, output_pos.y)

@@ -34,6 +34,40 @@ def step_state(state: State, dt: float) -> None:
     update_neuron_activity(state.neurons, dt)
 
 
+def clamp_charge(amount: float) -> float:
+    return max(0.0, min(1.0, amount))
+
+
+def maybe_start_signal(neuron: Neuron):
+    if neuron.signal_active:
+        return
+    if neuron.charge >= 1.0:
+        neuron.charge = 0.0
+        neuron.signal_active = True
+        neuron.signal_pos = 0.0
+
+
+def signal_transfer_amount(input: Input, output: Output) -> float:
+    return clamp_charge(1.0 * input.weight * output.weight)
+
+
+def dispatch_signal(neuron: Neuron):
+    for output in neuron.outputs:
+        connected_input = output.connected_input
+        if not connected_input:
+            continue
+        target_neuron = connected_input.parent_neuron
+        if not target_neuron:
+            continue
+
+        transfer = signal_transfer_amount(connected_input, output)
+        if transfer <= 0.0:
+            continue
+
+        target_neuron.charge = clamp_charge(target_neuron.charge + transfer)
+        maybe_start_signal(target_neuron)
+
+
 def update_neuron_activity(neurons, dt: float) -> None:
     for neuron in neurons:
         if neuron.signal_active:
@@ -41,12 +75,10 @@ def update_neuron_activity(neurons, dt: float) -> None:
             if neuron.signal_pos >= 1.0:
                 neuron.signal_pos = 0.0
                 neuron.signal_active = False
+                dispatch_signal(neuron)
         else:
             neuron.charge += neuron.charge_rate * dt
-            if neuron.charge >= 1.0:
-                neuron.charge = 0.0
-                neuron.signal_active = True
-                neuron.signal_pos = 0.0
+            maybe_start_signal(neuron)
 
 
 # return an ivec2 of -1, 0, or +1 added to x and y of pos
