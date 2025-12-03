@@ -1,18 +1,31 @@
 import random
 import glm
 
-from src.brain import Neuron
+from src.brain import Input, Neuron, Output
 from src.state import State, move_input, move_output
-from src.settings import GRID_SIZE, INPUT_MAX_DIST, OUTPUT_MAX_DIST, HUB_MAX_DIST
+from src.settings import (
+    GRID_SIZE,
+    INPUT_MAX_DIST,
+    OUTPUT_MAX_DIST,
+    HUB_MAX_DIST,
+    SIGNAL_SPEED,
+    NEURON_SATISFACTION_RATIO,
+    HUB_SATISFACTION_RATIO,
+)
 
 
 def step_state(state: State, dt: float) -> None:
     """Advance simulation time and bookkeeping."""
     state.step_count += 1
     state.time += dt
+    move_neurons_this_frame = state.step_count % 8 == 0
+    move_hubs_this_frame = state.step_count % 4 == 0
 
     for neuron in state.neurons:
-        migrate_neuron(state, neuron)
+        if move_neurons_this_frame:
+            migrate_neuron(state, neuron)
+        if move_hubs_this_frame:
+            migrate_hub(state, neuron)
         for input in neuron.inputs:
             migrate_input(state, input)
         for output in neuron.outputs:
@@ -24,7 +37,7 @@ def step_state(state: State, dt: float) -> None:
 def update_neuron_activity(neurons, dt: float) -> None:
     for neuron in neurons:
         if neuron.signal_active:
-            neuron.signal_pos += State.SIGNAL_SPEED * dt
+            neuron.signal_pos += SIGNAL_SPEED * dt
             if neuron.signal_pos >= 1.0:
                 neuron.signal_pos = 0.0
                 neuron.signal_active = False
@@ -71,6 +84,43 @@ def clamp_to_grid(point: glm.ivec2) -> glm.ivec2:
     )
 
 
+def clamp_to_taxicab_neighborhood(
+    point: glm.ivec2, center: glm.ivec2 | None, max_dist: int
+) -> glm.ivec2:
+    """Clamp point to grid and within an L1 neighborhood of center."""
+    clamped = clamp_to_grid(point)
+    if center is None:
+        return clamped
+
+    dx = clamped.x - center.x
+    dy = clamped.y - center.y
+    while abs(dx) + abs(dy) > max_dist:
+        if abs(dx) >= abs(dy) and dx != 0:
+            dx -= 1 if dx > 0 else -1
+        elif dy != 0:
+            dy -= 1 if dy > 0 else -1
+        else:
+            break
+    return clamp_to_grid(glm.ivec2(center.x + dx, center.y + dy))
+
+
+def pull_outputs_toward_hub(state: State, neuron: Neuron):
+    """Ensure outputs remain within their allowed radius when the hub moves."""
+    hub_center = neuron.hub_pos
+    if hub_center is None:
+        return
+
+    for output in neuron.outputs:
+        new_pos = clamp_to_taxicab_neighborhood(
+            glm.ivec2(output.pos.x, output.pos.y), hub_center, OUTPUT_MAX_DIST
+        )
+        if new_pos != output.pos:
+            if output.connected_input:
+                disconnect_input_output(output.connected_input, output)
+            move_output(state, output, new_pos)
+            attempt_connect_output(state, output)
+
+
 # migrate neuron
 """
 migrate neuron will check if the neuron is currently satisfied
@@ -99,6 +149,8 @@ def migrate_neuron(state: State, neuron: Neuron):
     for input in neuron.inputs:
         moved_x = False
         moved_y = False
+        new_x = input.pos.x
+        new_y = input.pos.y
 
         # check if input is too far in x direction
         x_dist = abs(input.pos.x - neuron.pos.x)
@@ -108,9 +160,7 @@ def migrate_neuron(state: State, neuron: Neuron):
             moved_x = True
             # if the neron was connected before, it should be disconnected.
             if input.connected_output:
-                connected_output = input.connected_output
-                connected_output.connected_input = None
-                input.connected_output = None
+                disconnect_input_output(input, input.connected_output)
 
         # check if input is too far in y direction
         y_dist = abs(input.pos.y - neuron.pos.y)
@@ -120,70 +170,23 @@ def migrate_neuron(state: State, neuron: Neuron):
             moved_y = True
             # if the neron was connected before, it should be disconnected.
             if input.connected_output:
-                connected_output = input.connected_output
-                connected_output.connected_input = None
-                input.connected_output = None
+                disconnect_input_output(input, input.connected_output)
 
-        if moved_x:
-            input.pos.x = new_x
-        if moved_y:
-            input.pos.y = new_y
         if moved_x or moved_y:
-            # replace the neuron in the input lookup
-            move_input(state, input, glm.ivec2(input.pos.x, input.pos.y))
+            target_pos = clamp_to_taxicab_neighborhood(
+                glm.ivec2(new_x, new_y), neuron.pos, INPUT_MAX_DIST
+            )
+            move_input(state, input, target_pos)
+            attempt_connect_input(state, input)
 
-    # check if hub is now too far from neuron
+    # ensure hub stays within allowed distance after the neuron moves
     hub_pos = neuron.hub_pos
-    hub_step = glm.ivec2(0, 0)
-
-    hub_moved_x = False
-    hub_x_dist = abs(hub_pos.x - neuron.pos.x)
-    if hub_x_dist > HUB_MAX_DIST:
-        hub_step.x = step.x
-        hub_moved_x = True
-
-    hub_moved_y = False
-    hub_y_dist = abs(hub_pos.y - neuron.pos.y)
-    if hub_y_dist > HUB_MAX_DIST:
-        hub_step.y = step.y
-        hub_moved_y = True
-
-    if hub_moved_x or hub_moved_y:
-        new_hub_pos = glm.ivec2(hub_pos.x + hub_step.x, hub_pos.y + hub_step.y)
-        neuron.hub_pos = new_hub_pos
-
-        # check if outputs have now moved beyond max distance from hub in both dimensions
-        for output in neuron.outputs:
-            output_moved_x = False
-            output_x_dist = abs(output.pos.x - neuron.hub_pos.x)
-            if output_x_dist > neuron.output_max_dist:
-                new_x = output.pos.x + hub_step.x
-                output_moved_x = True
-                # if the output was connected before, it should be disconnected.
-                if output.connected_input:
-                    connected_input = output.connected_input
-                    connected_input.connected_output = None
-                    output.connected_input = None
-
-            output_moved_y = False
-            output_y_dist = abs(output.pos.y - neuron.hub_pos.y)
-            if output_y_dist > neuron.output_max_dist:
-                new_y = output.pos.y + hub_step.y
-                output_moved_y = True
-                # if the output was connected before, it should be disconnected.
-                if output.connected_input:
-                    connected_input = output.connected_input
-                    connected_input.connected_output = None
-                    output.connected_input = None
-
-            if output_moved_x:
-                output.pos.x = new_x
-            if output_moved_y:
-                output.pos.y = new_y
-
-            if output_moved_x or output_moved_y:
-                # replace the output in the output lookup
-                move_output(state, output, glm.ivec2(output.pos.x, output.pos.y))
+    clamped_hub = clamp_to_taxicab_neighborhood(
+        glm.ivec2(hub_pos.x, hub_pos.y), neuron.pos, HUB_MAX_DIST
+    )
+    if clamped_hub != hub_pos:
+        neuron.hub_pos = clamped_hub
+        pull_outputs_toward_hub(state, neuron)
 
 
 def migrate_input(state: State, input):
@@ -199,13 +202,33 @@ def migrate_input(state: State, input):
         return  # no movement
 
     maybe_new_pos = glm.ivec2(input.pos.x + step.x, input.pos.y + step.y)
-    maybe_new_pos = clamp_to_grid(maybe_new_pos)
+    parent_neuron = input.parent_neuron
+    center = parent_neuron.pos if parent_neuron else None
+    maybe_new_pos = clamp_to_taxicab_neighborhood(maybe_new_pos, center, INPUT_MAX_DIST)
     if maybe_new_pos == input.pos:
         return  # no movement
 
-    input.pos = maybe_new_pos
     # we do not have to check if we broke a connection since we dont migrate if connected
-    move_input(state, input, glm.ivec2(input.pos.x, input.pos.y))
+    move_input(state, input, maybe_new_pos)
+    attempt_connect_input(state, input)
+
+
+def migrate_hub(state: State, neuron: Neuron):
+    """Randomly walk hubs while keeping them near their neuron."""
+    step = random_step()
+    if step.x == 0 and step.y == 0:
+        return
+
+    maybe_new_pos = glm.ivec2(neuron.hub_pos.x + step.x, neuron.hub_pos.y + step.y)
+    maybe_new_pos = clamp_to_taxicab_neighborhood(
+        maybe_new_pos, neuron.pos, HUB_MAX_DIST
+    )
+
+    if maybe_new_pos == neuron.hub_pos:
+        return
+
+    neuron.hub_pos = maybe_new_pos
+    pull_outputs_toward_hub(state, neuron)
 
 
 def migrate_output(state: State, output):
@@ -221,10 +244,102 @@ def migrate_output(state: State, output):
         return  # no movement
 
     maybe_new_pos = glm.ivec2(output.pos.x + step.x, output.pos.y + step.y)
-    maybe_new_pos = clamp_to_grid(maybe_new_pos)
+    parent_neuron = output.parent_neuron
+    hub_center = parent_neuron.hub_pos if parent_neuron else None
+    maybe_new_pos = clamp_to_taxicab_neighborhood(
+        maybe_new_pos, hub_center, OUTPUT_MAX_DIST
+    )
     if maybe_new_pos == output.pos:
         return  # no movement
 
-    output.pos = maybe_new_pos
     # we do not have to check if we broke a connection since we dont migrate if connected
-    move_output(state, output, glm.ivec2(output.pos.x, output.pos.y))
+    move_output(state, output, maybe_new_pos)
+    attempt_connect_output(state, output)
+
+
+def set_neuron_satisfaction(neuron: Neuron):
+    """Set the satisfied status of the neuron based on its connections."""
+
+    connected_inputs = sum(1 for input in neuron.inputs if input.connected_output)
+    total_inputs = len(neuron.inputs)
+    neuron.satisfied = (
+        connected_inputs / total_inputs >= NEURON_SATISFACTION_RATIO
+        if total_inputs > 0
+        else True
+    )
+
+
+def set_hub_satisfaction(neuron: Neuron):
+    """Set the satisfied status of the neuron hub based on its connections."""
+
+    connected_outputs = sum(1 for output in neuron.outputs if output.connected_input)
+    total_outputs = len(neuron.outputs)
+    neuron.hub_satisfied = (
+        connected_outputs / total_outputs >= HUB_SATISFACTION_RATIO
+        if total_outputs > 0
+        else True
+    )
+
+
+def connect_input_output(input: Input, output: Output):
+    """Connect the given input and output and update satisfaction."""
+    if input.connected_output or output.connected_input:
+        return
+    if input.parent_neuron is output.parent_neuron:
+        return
+
+    input.connected_output = output
+    output.connected_input = input
+
+    if input.parent_neuron:
+        set_neuron_satisfaction(input.parent_neuron)
+    if output.parent_neuron:
+        set_hub_satisfaction(output.parent_neuron)
+
+
+def disconnect_input_output(input: Input | None, output: Output | None):
+    """Disconnect the given input/output pair and update satisfaction."""
+    if not input or not output:
+        return
+
+    if input.connected_output is output:
+        input.connected_output = None
+    if output.connected_input is input:
+        output.connected_input = None
+
+    if input.parent_neuron:
+        set_neuron_satisfaction(input.parent_neuron)
+    if output.parent_neuron:
+        set_hub_satisfaction(output.parent_neuron)
+
+
+def attempt_connect_input(state: State, input: Input):
+    """Connect the input to an available output at its current location."""
+    if input.connected_output:
+        return
+
+    key = (input.pos.x, input.pos.y)
+    candidates = state.output_pos_lookup.get(key)
+    if not candidates:
+        return
+
+    for output in candidates:
+        if not output.connected_input:
+            connect_input_output(input, output)
+            break
+
+
+def attempt_connect_output(state: State, output: Output):
+    """Connect the output to an available input at its current location."""
+    if output.connected_input:
+        return
+
+    key = (output.pos.x, output.pos.y)
+    candidates = state.input_pos_lookup.get(key)
+    if not candidates:
+        return
+
+    for input in candidates:
+        if not input.connected_output:
+            connect_input_output(input, output)
+            break

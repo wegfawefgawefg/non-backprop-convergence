@@ -59,6 +59,7 @@ class Neuron:
         Neuron.NEXT_ID += 1
 
         self.satisfied = False
+        self.hub_satisfied = False
 
         self.pos: glm.ivec2 = None
         self.charge: float = None
@@ -139,6 +140,10 @@ def init_brain(state):
             new_output.pos = output_pos
             new_output.parent_neuron = neuron
             neuron.outputs.append(new_output)
+            key = (output_pos.x, output_pos.y)
+            if key not in state.output_pos_lookup:
+                state.output_pos_lookup[key] = []
+            state.output_pos_lookup[key].append(new_output)
 
         neuron.charge = random.random()
         neuron.charge_rate = NEURON_CHARGE_RATE
